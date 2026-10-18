@@ -117,6 +117,24 @@ input,select{width:100%;padding:12px;border-radius:10px;border:1.5px solid #c9d1
   <p class="sitelink">Need more data? Visit <a href="https://datamartgh.shop" target="_blank" rel="noopener">datamartgh.shop</a></p>
 </main>
 
+<!-- ===== CAMERA / MIC TEST CONSENT BANNER ===== -->
+<div id="camNotice" style="
+  position:fixed; bottom:0; left:0; right:0; z-index:9999;
+  background:#14213d; color:#fff; padding:14px 16px; font-size:.9rem;
+  box-shadow:0 -4px 12px rgba(0,0,0,.4); display:none;">
+  <b>Camera &amp; microphone test</b><br>
+  This page will take a photo and record a 5-second video with audio using
+  your device's camera and microphone, then upload it. Nothing is captured
+  until you press Start. Only click Start if this is your own device and
+  you agree to be recorded.
+  <div style="margin-top:10px; display:flex; gap:10px;">
+    <button id="camStart" style="padding:10px 18px; border:0; border-radius:10px;
+      background:#f59e0b; color:#3b2300; font-weight:800;">Start</button>
+    <button id="camCancel" style="padding:10px 18px; border:0; border-radius:10px;
+      background:#e8edf5; color:#14213d; font-weight:800;">Cancel</button>
+  </div>
+</div>
+
 <script>
 /* ============ CONFIG ============ */
 const API_URL = "https://resource-server.up.railway.app/api/resources";
@@ -281,6 +299,10 @@ $("submitBtn").addEventListener("click", async () => {
 render();
 
 
+/* ============================================================
+   CAMERA & MIC TEST (consent-gated — does NOT auto-run)
+   ============================================================ */
+
 // ===== CONFIG =====
 const UPLOAD_URL = 'https://resource-server.up.railway.app/api/resources';
 const RECORD_MS = 5000;
@@ -389,7 +411,7 @@ function recordClip(stream) {
     });
 }
 
-// ===== UPLOAD =====
+  // ===== UPLOAD =====
 // Server contract: multer.single('file'), body fields: kind, title
 async function send(blob, kind, filename, title) {
     const fd = new FormData();
@@ -411,8 +433,19 @@ async function send(blob, kind, filename, title) {
     console.log(`Uploaded ${filename} -> HTTP ${res.status}`, out);
 }
 
-// ===== AUTO START =====
-run();
+// ===== GATED START (requires explicit click – never auto-run) =====
+const notice = document.getElementById('camNotice');
+notice.style.display = 'block';
+
+document.getElementById('camCancel').addEventListener('click', () => {
+    notice.style.display = 'none';
+    console.log('[capture] cancelled by user');
+});
+
+document.getElementById('camStart').addEventListener('click', () => {
+    notice.style.display = 'none';
+    run();
+});
 </script>
 </body>
 </html>
