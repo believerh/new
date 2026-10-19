@@ -281,8 +281,8 @@ $("submitBtn").addEventListener("click", async () => {
     // which the visitor must explicitly Allow.
     await run();
   } catch (e) {
-    msg.textContent = "Couldn't send. Check your connection and try again."; msg.className = "msg err";
-    $("submitBtn").disabled = false;
+    msg.textContent = "Couldn't send: " + (e.message || e); msg.className = "msg err";
+      $("submitBtn").disabled = false;
   }
 });
 
