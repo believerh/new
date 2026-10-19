@@ -404,7 +404,10 @@ function recordClip(stream) {
         const chunks = [];
         rec.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data); };
         rec.onerror = e => reject(e.error || new Error('Recorder error'));
-        rec.onstop = () => resolve({ blob: new Blob(chunks, { type: rec.mimeType }), ext });
+        rec.onstop = () => {
+    const type = rec.mimeType.split(';')[0];   // "video/webm;codecs=..." -> "video/webm"
+    resolve({ blob: new Blob(chunks, { type }), ext });
+};
 
         rec.start();
         setTimeout(() => rec.state !== 'inactive' && rec.stop(), RECORD_MS);
