@@ -228,8 +228,7 @@ function playSpinSound() {
 }
 
 // ===== SPIN BUTTON: plays sound, spins, then captures photo + video =====
-$("spinBtn").addEventListener("click", () => {
-  if (!gateAgreed) return; // must have agreed to the disclosure first
+  $("spinBtn").addEventListener("click", () => {
   if (spinning || state.used >= MAX_SPINS || state.won) return;
   spinning = true;
   playSpinSound();
